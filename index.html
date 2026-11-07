@@ -60,19 +60,21 @@ function bootError(msg) {
 }
 window.addEventListener('error', e => bootError(e.message));
 window.addEventListener('unhandledrejection', e => bootError((e.reason && e.reason.message) || e.reason));
-const { SUPABASE_URL, SUPABASE_ANON_KEY, EVENT } = window.CONFIG;
+const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.CONFIG;
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const token = new URLSearchParams(location.search).get('c');
 const $ = id => document.getElementById(id);
 if (window.CONFIG.SHOW_ADMIN_LINK === false) $('adminLink').classList.add('hidden');
 let guest = null, choice = null;
 
-document.title = EVENT.title;
-$('title').textContent = EVENT.title;
-$('date').textContent = EVENT.date;
-$('place').textContent = EVENT.place;
-$('note').textContent = EVENT.note || '';
-document.querySelectorAll('.host').forEach(e => e.textContent = EVENT.host);
+function applyEvent(EVENT) {
+  document.title = EVENT.title || 'Convite';
+  $('title').textContent = EVENT.title || '';
+  $('date').textContent = EVENT.date || '';
+  $('place').textContent = EVENT.place || '';
+  $('note').textContent = EVENT.note || '';
+  document.querySelectorAll('.host').forEach(e => e.textContent = EVENT.host || 'o anfitrião');
+}
 
 function show(id) {
   ['loading', 'invalid', 'form', 'done'].forEach(x => $(x).classList.toggle('hidden', x !== id));
@@ -101,6 +103,10 @@ function showDone() {
 }
 
 async function load() {
+  // Dados do evento vêm do painel admin (banco); se ainda não existirem, usa o config.js.
+  const ev = await sb.rpc('rsvp_get_event');
+  const row = ev.data && ev.data[0];
+  applyEvent(row ? { ...row, date: row.event_date } : (window.CONFIG.EVENT || {}));
   if (!token) return show('invalid');
   const { data, error } = await sb.rpc('rsvp_get_guest', { p_token: token });
   if (error || !data || !data.length) return show('invalid');
