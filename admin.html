@@ -31,6 +31,21 @@
       <div class="stat"><b id="sAll">0</b>convites enviados</div>
     </div>
 
+    <details class="panel" style="margin-bottom:20px">
+      <summary>Dados do evento e mensagem do WhatsApp</summary>
+      <p class="error hidden" id="evHint">A tabela do evento ainda não existe. Rode o arquivo schema-evento.sql no Supabase e atualize esta página.</p>
+      <label for="fTitle">Nome do evento</label><input id="fTitle">
+      <label for="fHost">Anfitrião</label><input id="fHost">
+      <label for="fDate">Data e hora</label><input id="fDate" placeholder="Sábado, 14 de dezembro, às 19h">
+      <label for="fPlace">Local</label><input id="fPlace">
+      <label for="fNote">Aviso (opcional)</label><input id="fNote" placeholder="Confirme sua presença até 30 de novembro.">
+      <label for="fMsg">Mensagem do WhatsApp</label>
+      <textarea id="fMsg" style="min-height:190px"></textarea>
+      <p class="muted" style="font-size:.9rem;margin-top:6px">Códigos trocados automaticamente: {nome} {evento} {data} {local} {link}</p>
+      <button class="btn" id="saveEv">Salvar</button>
+      <span id="evStatus" class="muted" style="margin-left:12px"></span>
+    </details>
+
     <div class="panel">
       <h2>Adicionar convidados</h2>
       <label for="names" style="margin-top:0">Um nome por linha</label>
@@ -59,7 +74,18 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <script>
-const { SUPABASE_URL, SUPABASE_ANON_KEY, EVENT } = window.CONFIG;
+function bootError(msg) {
+  const p = document.createElement('p'); p.className = 'error';
+  p.textContent = 'Erro: ' + msg;
+  document.querySelector('main').append(p);
+  const l = document.getElementById('loading'); if (l) l.classList.add('hidden');
+}
+window.addEventListener('error', e => bootError(e.message));
+window.addEventListener('unhandledrejection', e => bootError((e.reason && e.reason.message) || e.reason));
+const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.CONFIG;
+const EVENT = window.CONFIG.EVENT || {};
+const DEF_MSG = window.CONFIG.WHATSAPP_MESSAGE || 'Olá, {nome}! Confirme sua presença em {evento}: {link}';
+let settings = null, settingsLoaded = false;
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const $ = id => document.getElementById(id);
 const base = new URL('./', location.href).href;
@@ -73,7 +99,26 @@ function view(logged) {
   $('panel').classList.toggle('hidden', !logged);
 }
 
+async function loadSettings() {
+  const { data, error } = await sb.from('rsvp_settings').select('*').eq('id', 1).maybeSingle();
+  settings = error ? null : data;
+  $('evHint').classList.toggle('hidden', !error);
+  const E = settings || { ...EVENT, event_date: EVENT.date, whatsapp_message: DEF_MSG };
+  $('fTitle').value = E.title || ''; $('fHost').value = E.host || '';
+  $('fDate').value = E.event_date || ''; $('fPlace').value = E.place || '';
+  $('fNote').value = E.note || ''; $('fMsg').value = E.whatsapp_message || DEF_MSG;
+}
+
+$('saveEv').onclick = async () => {
+  const row = { id: 1, title: $('fTitle').value.trim(), host: $('fHost').value.trim(), event_date: $('fDate').value.trim(),
+    place: $('fPlace').value.trim(), note: $('fNote').value.trim(), whatsapp_message: $('fMsg').value, updated_at: new Date().toISOString() };
+  const { error } = await sb.from('rsvp_settings').upsert(row);
+  $('evStatus').textContent = error ? 'Erro ao salvar: ' + error.message : 'Salvo.';
+  if (!error) settings = row;
+};
+
 async function load() {
+  if (!settingsLoaded) { settingsLoaded = true; await loadSettings(); }
   const { data, error } = await sb.from('rsvp_guests').select('*').order('name');
   if (error) { alert('Erro ao carregar: ' + error.message); return; }
   guests = data; render();
@@ -98,7 +143,11 @@ function render() {
     const btn = (text, fn, cls = '') => { const b = document.createElement('button'); b.className = 'btn ghost ' + cls; b.textContent = text; b.onclick = fn; td.append(b); };
     btn('Copiar link', async e => { await navigator.clipboard.writeText(linkOf(g)); e.target.textContent = 'Copiado'; setTimeout(() => e.target.textContent = 'Copiar link', 1500); });
     btn('WhatsApp', () => {
-      const msg = `Olá, ${g.name}! Você está convidado(a) para ${EVENT.title}. Confirme sua presença por aqui: ${linkOf(g)}`;
+      const S = settings || {};
+      const msg = (S.whatsapp_message || DEF_MSG)
+        .replaceAll('{nome}', g.name).replaceAll('{evento}', S.title ?? EVENT.title ?? '')
+        .replaceAll('{data}', S.event_date ?? EVENT.date ?? '').replaceAll('{local}', S.place ?? EVENT.place ?? '')
+        .replaceAll('{link}', linkOf(g));
       window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
     });
     btn('Excluir', async () => {
