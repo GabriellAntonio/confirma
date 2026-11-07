@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Confirmação de presença</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600&family=Fraunces:wght@600&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <h1 id="title"></h1>
+  <div class="details">
+    <p><strong id="date"></strong></p>
+    <p id="place"></p>
+    <p class="muted" id="note"></p>
+  </div>
+
+  <p id="loading" class="muted">Carregando seu convite…</p>
+  <div id="invalid" class="panel hidden">
+    <h2>Convite não encontrado</h2>
+    <p class="muted">Confira se você abriu o link completo que recebeu. Se o problema continuar, fale com <span class="host"></span>.</p>
+  </div>
+
+  <section id="form" class="panel hidden">
+    <h2>Olá, <span id="guestName"></span></h2>
+    <p class="muted">Você vai ao evento?</p>
+    <div class="choices">
+      <button type="button" class="choice yes" id="btnYes" aria-pressed="false">Vou</button>
+      <button type="button" class="choice no" id="btnNo" aria-pressed="false">Não vou</button>
+    </div>
+    <div id="compBox" class="hidden">
+      <label for="comp">Acompanhantes</label>
+      <select id="comp"></select>
+    </div>
+    <label for="msg">Recado (opcional)</label>
+    <textarea id="msg" maxlength="500"></textarea>
+    <button class="btn" id="send" disabled>Enviar resposta</button>
+    <p class="error hidden" id="err"></p>
+  </section>
+
+  <section id="done" class="panel hidden">
+    <h2 id="doneTitle"></h2>
+    <p id="doneText" class="muted"></p>
+    <button class="btn ghost" id="edit" style="margin-top:8px">Alterar resposta</button>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script>
+const { SUPABASE_URL, SUPABASE_ANON_KEY, EVENT } = window.CONFIG;
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const token = new URLSearchParams(location.search).get('c');
+const $ = id => document.getElementById(id);
+let guest = null, choice = null;
+
+document.title = EVENT.title;
+$('title').textContent = EVENT.title;
+$('date').textContent = EVENT.date;
+$('place').textContent = EVENT.place;
+$('note').textContent = EVENT.note || '';
+document.querySelectorAll('.host').forEach(e => e.textContent = EVENT.host);
+
+function show(id) {
+  ['loading', 'invalid', 'form', 'done'].forEach(x => $(x).classList.toggle('hidden', x !== id));
+}
+
+function setChoice(c) {
+  choice = c;
+  $('btnYes').setAttribute('aria-pressed', c === 'yes');
+  $('btnNo').setAttribute('aria-pressed', c === 'no');
+  $('compBox').classList.toggle('hidden', !(c === 'yes' && guest.max_companions > 0));
+  $('send').disabled = !c;
+}
+
+function showDone() {
+  if (guest.status === 'yes') {
+    const n = guest.companions;
+    $('doneTitle').textContent = 'Presença confirmada';
+    $('doneText').textContent = n > 0
+      ? `Combinado, ${guest.name}! Esperamos você e mais ${n} ${n === 1 ? 'acompanhante' : 'acompanhantes'}.`
+      : `Combinado, ${guest.name}! Esperamos você.`;
+  } else {
+    $('doneTitle').textContent = 'Resposta registrada';
+    $('doneText').textContent = `Obrigado por avisar, ${guest.name}. Sentiremos sua falta.`;
+  }
+  show('done');
+}
+
+async function load() {
+  if (!token) return show('invalid');
+  const { data, error } = await sb.rpc('rsvp_get_guest', { p_token: token });
+  if (error || !data || !data.length) return show('invalid');
+  guest = data[0];
+  $('guestName').textContent = guest.name;
+  const sel = $('comp');
+  for (let i = 0; i <= guest.max_companions; i++) {
+    sel.add(new Option(i === 0 ? 'Vou sozinho(a)' : `${i} ${i === 1 ? 'pessoa' : 'pessoas'}`, i));
+  }
+  sel.value = guest.companions || 0;
+  $('msg').value = guest.message || '';
+  if (guest.status !== 'pending') showDone();
+  else { setChoice(null); show('form'); }
+}
+
+$('btnYes').onclick = () => setChoice('yes');
+$('btnNo').onclick = () => setChoice('no');
+
+$('send').onclick = async () => {
+  $('send').disabled = true; $('err').classList.add('hidden');
+  const { data, error } = await sb.rpc('rsvp_submit', {
+    p_token: token, p_status: choice,
+    p_companions: choice === 'yes' ? Number($('comp').value) : 0,
+    p_message: $('msg').value.trim()
+  });
+  if (error || !data) {
+    $('err').textContent = 'Não foi possível enviar sua resposta. Verifique a conexão e tente de novo.';
+    $('err').classList.remove('hidden'); $('send').disabled = false; return;
+  }
+  guest.status = choice;
+  guest.companions = choice === 'yes' ? Number($('comp').value) : 0;
+  showDone();
+};
+
+$('edit').onclick = () => { setChoice(guest.status); show('form'); };
+
+load();
+</script>
+</body>
+</html>

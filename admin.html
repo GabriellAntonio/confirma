@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Painel de convidados</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600&family=Fraunces:wght@600&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="wide">
+  <h1>Painel de convidados</h1>
+
+  <section id="login" class="panel hidden" style="max-width:420px">
+    <label for="email" style="margin-top:0">E-mail</label>
+    <input id="email" type="email" autocomplete="username">
+    <label for="pass">Senha</label>
+    <input id="pass" type="password" autocomplete="current-password">
+    <button class="btn" id="enter">Entrar</button>
+    <p class="error hidden" id="loginErr"></p>
+  </section>
+
+  <section id="panel" class="hidden">
+    <div class="stats">
+      <div class="stat"><b id="sYes">0</b>pessoas confirmadas</div>
+      <div class="stat"><b id="sNo">0</b>não vão</div>
+      <div class="stat"><b id="sWait">0</b>sem resposta</div>
+      <div class="stat"><b id="sAll">0</b>convites enviados</div>
+    </div>
+
+    <div class="panel">
+      <h2>Adicionar convidados</h2>
+      <label for="names" style="margin-top:0">Um nome por linha</label>
+      <textarea id="names" placeholder="Maria Souza&#10;João e família"></textarea>
+      <div class="grid2">
+        <div><label for="max">Acompanhantes permitidos por convite</label><input id="max" type="number" min="0" value="0"></div>
+      </div>
+      <button class="btn" id="add">Adicionar</button>
+    </div>
+
+    <div class="toolbar">
+      <button class="btn ghost" id="csv">Baixar planilha (CSV)</button>
+      <button class="btn ghost" id="refresh">Atualizar</button>
+      <button class="btn ghost" id="logout">Sair</button>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Convidado</th><th>Resposta</th><th>Acomp.</th><th>Recado</th><th>Ações</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script>
+const { SUPABASE_URL, SUPABASE_ANON_KEY, EVENT } = window.CONFIG;
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const $ = id => document.getElementById(id);
+const base = new URL('./', location.href).href;
+const label = { yes: 'Vai', no: 'Não vai', pending: 'Sem resposta' };
+let guests = [];
+
+const linkOf = g => `${base}?c=${g.token}`;
+
+function view(logged) {
+  $('login').classList.toggle('hidden', logged);
+  $('panel').classList.toggle('hidden', !logged);
+}
+
+async function load() {
+  const { data, error } = await sb.from('rsvp_guests').select('*').order('name');
+  if (error) { alert('Erro ao carregar: ' + error.message); return; }
+  guests = data; render();
+}
+
+function render() {
+  const yes = guests.filter(g => g.status === 'yes');
+  $('sYes').textContent = yes.reduce((s, g) => s + 1 + g.companions, 0);
+  $('sNo').textContent = guests.filter(g => g.status === 'no').length;
+  $('sWait').textContent = guests.filter(g => g.status === 'pending').length;
+  $('sAll').textContent = guests.length;
+
+  const tb = $('rows'); tb.replaceChildren();
+  for (const g of guests) {
+    const tr = document.createElement('tr');
+    const cell = (text, cls) => { const td = document.createElement('td'); td.textContent = text; if (cls) td.className = cls; tr.append(td); return td; };
+    cell(g.name);
+    cell(label[g.status], 's-' + g.status);
+    cell(g.status === 'yes' ? `${g.companions} de ${g.max_companions}` : `máx. ${g.max_companions}`);
+    cell(g.message || '');
+    const td = document.createElement('td'); td.className = 'row-actions';
+    const btn = (text, fn, cls = '') => { const b = document.createElement('button'); b.className = 'btn ghost ' + cls; b.textContent = text; b.onclick = fn; td.append(b); };
+    btn('Copiar link', async e => { await navigator.clipboard.writeText(linkOf(g)); e.target.textContent = 'Copiado'; setTimeout(() => e.target.textContent = 'Copiar link', 1500); });
+    btn('WhatsApp', () => {
+      const msg = `Olá, ${g.name}! Você está convidado(a) para ${EVENT.title}. Confirme sua presença por aqui: ${linkOf(g)}`;
+      window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
+    });
+    btn('Excluir', async () => {
+      if (!confirm(`Excluir ${g.name}? O link dele deixará de funcionar.`)) return;
+      const { error } = await sb.from('rsvp_guests').delete().eq('id', g.id);
+      if (error) alert(error.message); else load();
+    }, 'danger');
+    tr.append(td); tb.append(tr);
+  }
+  if (!guests.length) { const tr = document.createElement('tr'); const td = document.createElement('td'); td.colSpan = 5; td.className = 'muted'; td.textContent = 'Nenhum convidado ainda. Adicione nomes acima para gerar os links.'; tr.append(td); tb.append(tr); }
+}
+
+$('add').onclick = async () => {
+  const max = Math.max(0, parseInt($('max').value, 10) || 0);
+  const rows = $('names').value.split('\n').map(s => s.trim()).filter(Boolean).map(name => ({ name, max_companions: max }));
+  if (!rows.length) return;
+  const { error } = await sb.from('rsvp_guests').insert(rows);
+  if (error) return alert(error.message);
+  $('names').value = ''; load();
+};
+
+$('csv').onclick = () => {
+  const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const lines = [['Nome', 'Resposta', 'Acompanhantes', 'Recado', 'Respondeu em', 'Link'].map(q).join(',')];
+  for (const g of guests) lines.push([g.name, label[g.status], g.companions, g.message, g.responded_at, linkOf(g)].map(q).join(','));
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' }));
+  a.download = 'convidados.csv'; a.click();
+};
+
+$('refresh').onclick = load;
+$('logout').onclick = async () => { await sb.auth.signOut(); view(false); };
+
+$('enter').onclick = async () => {
+  $('loginErr').classList.add('hidden');
+  const { error } = await sb.auth.signInWithPassword({ email: $('email').value.trim(), password: $('pass').value });
+  if (error) { $('loginErr').textContent = 'E-mail ou senha incorretos.'; $('loginErr').classList.remove('hidden'); return; }
+  view(true); load();
+};
+
+(async () => {
+  const { data } = await sb.auth.getSession();
+  if (data.session) { view(true); load(); } else view(false);
+})();
+</script>
+</body>
+</html>
