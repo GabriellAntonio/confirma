@@ -52,3 +52,5 @@ th{font-weight:600;color:var(--muted)}
 .grid2{display:grid;grid-template-columns:1fr 140px;gap:12px}
 .adminlink{display:block;text-align:center;margin-top:40px;color:var(--muted);font-size:.85rem;text-decoration:none}
 .adminlink:hover{color:var(--accent);text-decoration:underline}
+summary{font:600 1.15rem/1.2 var(--serif);cursor:pointer}
+details[open]>summary{margin-bottom:4px}
