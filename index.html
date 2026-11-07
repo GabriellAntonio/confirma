@@ -46,15 +46,25 @@
     <p id="doneText" class="muted"></p>
     <button class="btn ghost" id="edit" style="margin-top:8px">Alterar resposta</button>
   </section>
+  <a id="adminLink" class="adminlink" href="admin.html">Admin</a>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <script>
+function bootError(msg) {
+  const p = document.createElement('p'); p.className = 'error';
+  p.textContent = 'Erro: ' + msg;
+  document.querySelector('main').append(p);
+  const l = document.getElementById('loading'); if (l) l.classList.add('hidden');
+}
+window.addEventListener('error', e => bootError(e.message));
+window.addEventListener('unhandledrejection', e => bootError((e.reason && e.reason.message) || e.reason));
 const { SUPABASE_URL, SUPABASE_ANON_KEY, EVENT } = window.CONFIG;
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const token = new URLSearchParams(location.search).get('c');
 const $ = id => document.getElementById(id);
+if (window.CONFIG.SHOW_ADMIN_LINK === false) $('adminLink').classList.add('hidden');
 let guest = null, choice = null;
 
 document.title = EVENT.title;
