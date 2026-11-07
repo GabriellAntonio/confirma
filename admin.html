@@ -25,7 +25,7 @@
 
   <section id="panel" class="hidden">
     <div class="stats">
-      <div class="stat"><b id="sYes">0</b>pessoas confirmadas</div>
+      <div class="stat"><b id="sYes">0</b>pessoas confirmadas<small id="sYesDet" class="muted" style="display:block"></small></div>
       <div class="stat"><b id="sNo">0</b>não vão</div>
       <div class="stat"><b id="sWait">0</b>sem resposta</div>
       <div class="stat"><b id="sAll">0</b>convites enviados</div>
@@ -42,6 +42,13 @@
       <label for="fMsg">Mensagem do WhatsApp</label>
       <textarea id="fMsg" style="min-height:190px"></textarea>
       <p class="muted" style="font-size:.9rem;margin-top:6px">Códigos trocados automaticamente: {nome} {evento} {data} {local} {link}</p>
+      <div id="notifyBox" class="hidden">
+        <h2 style="margin-top:28px">Aviso no seu WhatsApp</h2>
+        <p class="muted" style="font-size:.9rem">Receba uma mensagem a cada resposta, com o total de quem vai, não vai e ainda não respondeu. Veja o passo a passo no README (CallMeBot).</p>
+        <label style="display:flex;gap:10px;align-items:center;font-weight:400"><input type="checkbox" id="fNotify" style="width:auto"> Ativar avisos</label>
+        <label for="fPhone">Seu WhatsApp (com +55 e DDD, sem espaços)</label><input id="fPhone" placeholder="+5544999999999" inputmode="tel">
+        <label for="fKey">Chave do CallMeBot (apikey)</label><input id="fKey" autocomplete="off">
+      </div>
       <button class="btn" id="saveEv">Salvar</button>
       <span id="evStatus" class="muted" style="margin-left:12px"></span>
     </details>
@@ -107,11 +114,17 @@ async function loadSettings() {
   $('fTitle').value = E.title || ''; $('fHost').value = E.host || '';
   $('fDate').value = E.event_date || ''; $('fPlace').value = E.place || '';
   $('fNote').value = E.note || ''; $('fMsg').value = E.whatsapp_message || DEF_MSG;
+  const hasNotify = !!settings && 'notify_phone' in settings;
+  $('notifyBox').classList.toggle('hidden', !hasNotify);
+  if (hasNotify) { $('fNotify').checked = !!settings.notify_enabled; $('fPhone').value = settings.notify_phone || ''; $('fKey').value = settings.notify_apikey || ''; }
 }
 
 $('saveEv').onclick = async () => {
   const row = { id: 1, title: $('fTitle').value.trim(), host: $('fHost').value.trim(), event_date: $('fDate').value.trim(),
     place: $('fPlace').value.trim(), note: $('fNote').value.trim(), whatsapp_message: $('fMsg').value, updated_at: new Date().toISOString() };
+  if (!$('notifyBox').classList.contains('hidden')) {
+    Object.assign(row, { notify_enabled: $('fNotify').checked, notify_phone: $('fPhone').value.replace(/\s+/g, ''), notify_apikey: $('fKey').value.trim() });
+  }
   const { error } = await sb.from('rsvp_settings').upsert(row);
   $('evStatus').textContent = error ? 'Erro ao salvar: ' + error.message : 'Salvo.';
   if (!error) settings = row;
@@ -126,7 +139,9 @@ async function load() {
 
 function render() {
   const yes = guests.filter(g => g.status === 'yes');
-  $('sYes').textContent = yes.reduce((s, g) => s + 1 + g.companions, 0);
+  const comps = yes.reduce((s, g) => s + g.companions, 0);
+  $('sYes').textContent = yes.length + comps;
+  $('sYesDet').textContent = `${yes.length} convidados + ${comps} acompanhantes`;
   $('sNo').textContent = guests.filter(g => g.status === 'no').length;
   $('sWait').textContent = guests.filter(g => g.status === 'pending').length;
   $('sAll').textContent = guests.length;
