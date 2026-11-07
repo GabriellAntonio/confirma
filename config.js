@@ -1,9 +1,12 @@
 // Edite estes dados antes de publicar.
 window.CONFIG = {
   // Supabase > Project Settings > API
-SUPABASE_URL: "https://jvshwpvmacqaqhulcpnv.supabase.co",
-SUPABASE_ANON_KEY: "sb_publishable_I8BwFcJOahV0UFT2sLqbeg_Zx0v3tum",
- 
+  SUPABASE_URL: "https://jvshwpvmacqaqhulcpnv.supabase.co",
+  SUPABASE_ANON_KEY: "sb_publishable_I8BwFcJOahV0UFT2sLqbeg_Zx0v3tum",
+
+  // Mostra o link "Admin" no rodapé do convite. Coloque false antes de enviar aos convidados.
+  SHOW_ADMIN_LINK: true,
+
   EVENT: {
     title: "Nome do evento",
     host: "Nome do anfitrião",
@@ -12,4 +15,3 @@ SUPABASE_ANON_KEY: "sb_publishable_I8BwFcJOahV0UFT2sLqbeg_Zx0v3tum",
     note: "Confirme sua presença até 30 de novembro."
   }
 };
- 
