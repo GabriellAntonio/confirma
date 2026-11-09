@@ -46,7 +46,7 @@
         <h2 style="margin-top:28px">Aviso no seu WhatsApp</h2>
         <p class="muted" style="font-size:.9rem">Receba uma mensagem a cada resposta, com o total de quem vai, não vai e ainda não respondeu. Veja o passo a passo no README (CallMeBot).</p>
         <label style="display:flex;gap:10px;align-items:center;font-weight:400"><input type="checkbox" id="fNotify" style="width:auto"> Ativar avisos</label>
-        <label for="fPhone">Seu WhatsApp (com +55 e DDD, sem espaços)</label><input id="fPhone" placeholder="+5544999999999" inputmode="tel">
+        <label for="fPhone">Seu WhatsApp (código do país e DDD, sem + nem espaços)</label><input id="fPhone" placeholder="554488128462" inputmode="tel">
         <label for="fKey">Chave do CallMeBot (apikey)</label><input id="fKey" autocomplete="off">
       </div>
       <button class="btn" id="saveEv">Salvar</button>
@@ -123,7 +123,7 @@ $('saveEv').onclick = async () => {
   const row = { id: 1, title: $('fTitle').value.trim(), host: $('fHost').value.trim(), event_date: $('fDate').value.trim(),
     place: $('fPlace').value.trim(), note: $('fNote').value.trim(), whatsapp_message: $('fMsg').value, updated_at: new Date().toISOString() };
   if (!$('notifyBox').classList.contains('hidden')) {
-    Object.assign(row, { notify_enabled: $('fNotify').checked, notify_phone: $('fPhone').value.replace(/\s+/g, ''), notify_apikey: $('fKey').value.trim() });
+    Object.assign(row, { notify_enabled: $('fNotify').checked, notify_phone: $('fPhone').value.replace(/[\s+]/g, ''), notify_apikey: $('fKey').value.trim() });
   }
   const { error } = await sb.from('rsvp_settings').upsert(row);
   $('evStatus').textContent = error ? 'Erro ao salvar: ' + error.message : 'Salvo.';
